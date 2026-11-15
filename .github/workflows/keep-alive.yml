@@ -1,0 +1,39 @@
+# يُبقي قاعدة Supabase لمتابعة البحث نشطة حتى لا تُوقَف بسبب الخمول
+# المسار في المستودع: .github/workflows/keep-alive.yml
+
+name: Supabase keep-alive
+
+on:
+  schedule:
+    # الإثنين والخميس الساعة 03:17 بتوقيت UTC (06:17 بتوقيت الرياض)
+    - cron: "17 3 * * 1,4"
+  workflow_dispatch: # تشغيل يدوي من تبويب Actions للتجربة
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query research_points
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "::error::أضف SUPABASE_URL و SUPABASE_KEY في Secrets المستودع"
+            exit 1
+          fi
+
+          status=$(curl -sS -o response.json -w "%{http_code}" \
+            --retry 3 --retry-delay 20 --retry-all-errors \
+            "${SUPABASE_URL%/}/rest/v1/research_points?select=excel_row&limit=1" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY")
+
+          echo "HTTP $status"
+          cat response.json; echo
+
+          if [ "$status" != "200" ]; then
+            echo "::error::فشل الطلب (HTTP $status) — تحقق من حالة المشروع في لوحة Supabase"
+            exit 1
+          fi
